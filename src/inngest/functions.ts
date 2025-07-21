@@ -1,13 +1,19 @@
 import {inngest} from "./client";
 import {createAgent, openai} from "@inngest/agent-kit";
+import {Sandbox} from "@e2b/code-interpreter";
+import {getSandbox} from "@/lib/utils";
 
 export const helloWorld = inngest.createFunction(
     {id: "hello-world"},
     {event: "test/hello.world"},
-    async ({event}) => {
-        const summarizer = createAgent({
-            name: "summarizer",
-            system: "You are a expert summarizer, You summarize in 2 words",
+    async ({event, step}) => {
+        const sandboxId = await step.run("get-sandbox-id", async () => {
+            const sandbox = await Sandbox.create("xyx-next");
+            return sandbox.sandboxId;
+        });
+        const codeAgent = createAgent({
+            name: "code-agent",
+            system: "You are a expert next.js developer. You write readable, maintainable code. You write simple Next.js & React snippets.",
             model: openai({
                 model: "gpt-4.1",
                 baseUrl: "https://models.github.ai/inference",
@@ -15,10 +21,17 @@ export const helloWorld = inngest.createFunction(
             }),
         });
 
-        const {output} = await summarizer.run(
-            `Summarize the following text: ${event.data.value}`
+        const {output} = await codeAgent.run(
+            `Write the following snippet: ${event.data.value}`
         )
 
-        return {output};
+        const sandboxUrl = await step.run("get-sandbox-url", async () => {
+            const sandbox = await getSandbox(sandboxId);
+            const host = sandbox.getHost(3000);
+
+            return `https://${host}`
+        })
+
+        return {output, sandboxUrl};
     },
 );
